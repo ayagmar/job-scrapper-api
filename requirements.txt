@@ -3,3 +3,5 @@ pydantic
 sqlalchemy
 selenium
 fake_useragent
+psycopg2
+bs4

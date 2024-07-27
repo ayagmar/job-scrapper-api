@@ -1,11 +1,11 @@
 import logging
 from datetime import datetime
-from typing import List, Optional
 import time
 import random
 import uuid
 from urllib.parse import quote_plus
 import re
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
@@ -19,6 +19,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from fake_useragent import UserAgent
+from bs4 import BeautifulSoup
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -43,11 +44,13 @@ class JobListing(Base):
     summary = Column(Text, nullable=True)
     url = Column(String, unique=True, nullable=True)
     full_job_description = Column(Text, nullable=True)
+    indeed_company_url = Column(String, nullable=True)
     company_url = Column(String, nullable=True)
+    industry = Column(String, nullable=True)
     date_scraped = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.drop_all(bind=engine)  # Drop existing tables
-Base.metadata.create_all(bind=engine)  # Create tables
+Base.metadata.create_all(bind=engine)
 
 class JobListingResponse(BaseModel):
     id: Optional[str] = None
@@ -57,8 +60,13 @@ class JobListingResponse(BaseModel):
     summary: Optional[str] = None
     url: Optional[str] = None
     full_job_description: Optional[str] = None
+    indeed_company_url: Optional[str] = None
     company_url: Optional[str] = None
+    industry: Optional[str] = None
     date_scraped: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
 
 class JobScraper:
     def __init__(self):
@@ -69,12 +77,8 @@ class JobScraper:
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument(f"user-agent={self._get_random_user_agent()}")
+        chrome_options.add_argument(f"user-agent={UserAgent().random}")
         return webdriver.Chrome(options=chrome_options)
-
-    def _get_random_user_agent(self):
-        ua = UserAgent()
-        return ua.random
 
     def _wait_and_get_element(self, by, value, timeout=10):
         return WebDriverWait(self.driver, timeout).until(
@@ -146,11 +150,30 @@ class JobScraper:
                 ".//a[contains(@href, '/rc/clk')]",
                 ".//a[contains(@href, '/company')]"
             ], 'href')),
-            'date_scraped': datetime.now().strftime('%Y-%m-%d')
+            'date_scraped': datetime.utcnow()
         }
 
         logger.info(f"Parsed job: {job['title']} at {job['company']}")
         return job
+
+    def _fetch_company_details(self, company_url):
+        self.driver.get(company_url)
+        WebDriverWait(self.driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//ul[contains(@class, 'css-hbpv4x')]"))
+        )
+        company_info = self.driver.find_element(By.XPATH, "//ul[contains(@class, 'css-hbpv4x')]").get_attribute('outerHTML')
+        soup = BeautifulSoup(company_info, 'html.parser')
+        company_industry = None
+        real_company_url = None
+        for li in soup.find_all('li'):
+            if li.get('data-testid') == 'companyInfo-industry':
+                company_industry = li.find('a').text if li.find('a') else None
+            elif li.get('data-testid') == 'companyInfo-companyWebsite':
+                real_company_url = li.find('a')['href'] if li.find('a') else None
+        return {
+            'company_url': real_company_url,
+            'industry': company_industry
+        }
 
     def _fetch_job_details(self, job_url):
         self.driver.get(job_url)
@@ -162,14 +185,23 @@ class JobScraper:
             "//div[@id='jobDescriptionText']",
             "//div[@class='jobsearch-JobComponent-description']"
         ])
-        company_url = self._extract_element_attribute(self.driver, [
+        indeed_company_url = self._extract_element_attribute(self.driver, [
             "//div[@data-testid='jobsearch-CompanyInfoContainer']//a",
             "//a[@data-tn-element='companyName']"
         ], 'href')
 
+        company_details = {'company_url': None, 'industry': None}
+        if indeed_company_url:
+            try:
+                company_details = self._fetch_company_details(indeed_company_url)
+            except Exception as e:
+                logger.error(f"Error fetching company details: {e}")
+
         return {
             'full_job_description': job_description,
-            'company_url': company_url
+            'indeed_company_url': indeed_company_url,
+            'company_url': company_details['company_url'],
+            'industry': company_details['industry']
         }
 
     def scrape_jobs(self, job_title: str, country: str, pages: int) -> List[dict]:
@@ -189,13 +221,9 @@ class JobScraper:
                 try:
                     job_details = self._fetch_job_details(job['url'])
                     job.update(job_details)
-                    job['date_scraped'] = datetime.utcnow()
                     logger.info(f"Fetched details for job: {job['title']}")
                 except Exception as e:
                     logger.error(f"Error fetching details for job {job['title']}: {e}")
-                    job['full_job_description'] = ""
-                    job['company_url'] = ""
-                    job['date_scraped'] = datetime.utcnow()
                 time.sleep(random.uniform(1, 3))  # Random delay between job detail requests
 
             return all_job_listings
@@ -219,17 +247,7 @@ async def scrape_jobs(
         job_listings = scraper.scrape_jobs(job_title, country, pages)
         db = SessionLocal()
         for job in job_listings:
-            db_job = JobListing(
-                id=str(uuid.uuid4()),
-                title=job.get('title'),
-                company=job.get('company'),
-                location=job.get('location'),
-                summary=job.get('summary'),
-                url=job.get('url'),
-                full_job_description=job.get('full_job_description'),
-                company_url=job.get('company_url'),
-                date_scraped=datetime.utcnow()
-            )
+            db_job = JobListing(**job)
             db.add(db_job)
         db.commit()
         db.close()
@@ -255,6 +273,8 @@ async def get_jobs():
             url=job.url,
             full_job_description=job.full_job_description,
             company_url=job.company_url,
+            indeed_company_url=job.indeed_company_url,
+            industry=job.industry,
             date_scraped=job.date_scraped
         ) for job in jobs]
     except Exception as e:

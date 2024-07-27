@@ -1,0 +1,5 @@
+fastapi
+pydantic
+sqlalchemy
+selenium
+fake_useragent

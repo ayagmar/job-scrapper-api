@@ -16,16 +16,14 @@ A simple Python script using the FastAPI framework to scrape job listings from I
 **Overview**
 ------------
 
-This script utilizes the FastAPI framework to create a RESTful API for scraping job listings from Indeed. The API
-provides two endpoints: `/scrape_jobs` and `/jobs`. The former endpoint allows users to scrape jobs based on their
-title, country, and number of pages to crawl.
+This application leverages FastAPI to provide a flexible and maintainable RESTful API for scraping job listings. The project is organized into distinct modules for configuration, database management, scraper architecture, and business logic, promoting better organization and extensibility.
 
 
 **Features**
 ------------
 
-*   Scrapes job listings from Indeed
-*   Supports multiple countries (using IETF language tags)
+*   Modular Architecture: Separated into modules for configuration, database handling, models, schemas, and scrapers.
+*   Scraper Framework: Abstract BaseScraper class with specific implementations for different job boards (e.g., Indeed, LinkedIn).
 *   Handles pagination for efficient job crawling
 *   Provides a simple RESTful API using FastAPI
 *   Includes basic logging and error handling
@@ -37,6 +35,7 @@ title, country, and number of pages to crawl.
 *   Python 3.8+
 *   FastAPI framework (`pip install fastapi`)
 *   Selenium WebDriver for browser automation (`pip install selenium`)
+*   Pydantic for configuration management (pip install pydantic)
 
 
 **Usage**
@@ -50,16 +49,17 @@ title, country, and number of pages to crawl.
 **Endpoints**
 ------------
 
-### `/scrape_jobs`
+### `/api/v1/scrape_jobs`
 
 *   **Method:** GET
 *   **Parameters:**
 
     *   `job_title`: Job title to scrape (string)
     *   `country`: Country code for job listings (default: "us")
+    *   `source`: Source to scrape from (indeed,linkedin) default indeed
     *   `pages`: Number of pages to crawl (default: 1, range: 1-10)
 
-### `/jobs`
+### `/api/v1/jobs`
 
 *   **Method:** GET
 *   **Parameters:** None
@@ -71,8 +71,10 @@ To scrape jobs using the `/scrape_jobs` endpoint, send a GET request with the fo
 
 ```bash
 curl -X GET \
-  http://localhost:8000/scrape_jobs?job_title=python+developer&country=fr&page=5 \
+  http://localhost:8000/api/v1/scrape_jobs?job_title=java+developer&country=de&page=1&source=indeed \
   -H 'accept: application/json'
 ```
 
 This will return a list of scraped job listings in JSON format.
+
+Example : [View `response.json` on GitHub](https://github.com/ayagmar/job-scrapper-api/blob/master/results.json)

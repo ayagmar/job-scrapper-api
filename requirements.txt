@@ -5,3 +5,5 @@ selenium
 fake_useragent
 psycopg2
 bs4
+pydantic-settings
+uvicorn

@@ -26,7 +26,7 @@ This application leverages FastAPI to provide a flexible and maintainable RESTfu
 *   Scraper Framework: Abstract BaseScraper class with specific implementations for different job boards (e.g., Indeed, LinkedIn).
 *   Handles pagination for efficient job crawling
 *   Provides a simple RESTful API using FastAPI
-*   Includes basic logging and error handling
+*   Error Handling and Logging: Consistent error handling and logging configured through Pydantic's BaseSettings.
 
 
 **Requirements**
@@ -43,7 +43,7 @@ This application leverages FastAPI to provide a flexible and maintainable RESTfu
 
 1.  Clone the repository using `git clone https://github.com/ayagmar/job-scrapper-api`
 2.  Install required dependencies by running `pip install -r requirements.txt`
-3.  Run the script using `python .\app.py`
+3.  Run the script using `python .\app\main.py`
 
 
 **Endpoints**
@@ -71,10 +71,10 @@ To scrape jobs using the `/scrape_jobs` endpoint, send a GET request with the fo
 
 ```bash
 curl -X GET \
-  http://localhost:8000/api/v1/scrape_jobs?job_title=java+developer&country=de&page=1&source=indeed \
+  http://localhost:8000/api/v1/scrape_jobs?job_title=java+developer&country=fr&page=1&source=indeed \
   -H 'accept: application/json'
 ```
 
 This will return a list of scraped job listings in JSON format.
 
-Example : [View `response.json` on GitHub](https://github.com/ayagmar/job-scrapper-api/blob/master/results.json)
+Example : [View `response.json` on GitHub] (https://github.com/ayagmar/job-scrapper-api/blob/master/results.json)

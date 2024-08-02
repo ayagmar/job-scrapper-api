@@ -1,3 +1,6 @@
+Project moved to GO Concurrency, speed and go is simply more fun to learn https://github.com/ayagmar/gojobscraper 
+
+
 **Job Scraper Script**
 =====================
 
